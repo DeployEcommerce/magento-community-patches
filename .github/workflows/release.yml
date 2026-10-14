@@ -23,9 +23,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Work out the next version
         id: version
         run: |
@@ -71,7 +72,7 @@ jobs:
             echo
             echo "Every patch matches the sha256 Adobe publishes in its [patch registry](https://repo.magento.com/patch/patch-registry.json). \`patches-manifest.sha256\` lists them, and this release carries a GitHub build provenance attestation."
           } > notes.md
-      - uses: actions/attest-build-provenance@v2
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: |
             dist/magento-community-patches-${{ steps.version.outputs.version }}.zip
