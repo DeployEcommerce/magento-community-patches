@@ -1,0 +1,68 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Applies every shipped patch for a Magento Open Source release, in the order the
+ * plugin uses, to pristine files from the Mage-OS mirror. Then checks the plugin
+ * would recognise the result as fully applied, so a reinstall changes nothing.
+ *
+ * Usage: tools/bin/apply-test <release>   e.g. tools/bin/apply-test 2.4.8-p5
+ */
+
+declare(strict_types=1);
+
+use Composer\IO\BufferIO;
+use Composer\Util\ProcessExecutor;
+use DeployEcommerce\CommunityPatches\Applier;
+use DeployEcommerce\CommunityPatches\Diff;
+use DeployEcommerce\CommunityPatches\Manifest;
+use DeployEcommerce\CommunityPatches\Tools\Http;
+use DeployEcommerce\CommunityPatches\Tools\Mirror;
+
+$root = dirname(__DIR__, 2);
+require $root . '/vendor/autoload.php';
+
+$release = $argv[1] ?? '';
+if ($release === '') {
+    fwrite(STDERR, "Usage: tools/bin/apply-test <release>\n");
+    exit(1);
+}
+
+$patches = Manifest::fromFile($root . '/patches.json')->forVersion($release);
+if ($patches === []) {
+    echo "No patches ship for Magento Open Source $release.\n";
+    exit(0);
+}
+
+$steps = [];
+$paths = [];
+foreach ($patches as $patch) {
+    $content = (string) file_get_contents($root . '/' . $patch['file']);
+    $steps[] = ['label' => $patch['id'], 'content' => $content];
+    $paths = array_merge($paths, Diff::paths($content));
+}
+
+$tree = sys_get_temp_dir() . '/mcp-apply-test-' . bin2hex(random_bytes(6));
+mkdir($tree);
+$mirror = new Mirror(new Http(), getenv('MCP_MIRROR_CACHE') ?: sys_get_temp_dir() . '/mcp-mirror-cache');
+$mirror->extract(array_unique($paths), $mirror->releasePackages($release), $tree);
+
+$io = new BufferIO();
+$applier = new Applier(new ProcessExecutor($io), $io);
+$rc = 0;
+try {
+    $applier->apply($steps, $tree);
+    echo trim($io->getOutput()), "\n";
+    $applied = $applier->appliedCount($steps, $tree);
+    if ($applied !== count($steps)) {
+        echo "FAIL: after applying, only $applied of " . count($steps) . " patches are recognised as applied.\n";
+        $rc = 1;
+    } else {
+        echo "OK: all " . count($steps) . " patches apply to pristine Magento Open Source $release and are recognised on reinstall.\n";
+    }
+} catch (\Throwable $e) {
+    echo trim($io->getOutput()), "\nFAIL: ", $e->getMessage(), "\n";
+    $rc = 1;
+}
+exec('rm -rf ' . escapeshellarg($tree));
+exit($rc);

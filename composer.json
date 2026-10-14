@@ -1,0 +1,31 @@
+{
+    "name": "deployecommerce/magento-community-patches",
+    "description": "Applies Adobe's official Magento Open Source security patches automatically on composer install and update.",
+    "type": "composer-plugin",
+    "license": "OSL-3.0",
+    "require": {
+        "php": "^8.1",
+        "composer-plugin-api": "^2.0"
+    },
+    "require-dev": {
+        "composer/composer": "^2.6",
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "DeployEcommerce\\CommunityPatches\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "DeployEcommerce\\CommunityPatches\\Test\\": "tests/",
+            "DeployEcommerce\\CommunityPatches\\Tools\\": "tools/src/"
+        }
+    },
+    "extra": {
+        "class": "DeployEcommerce\\CommunityPatches\\Plugin"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

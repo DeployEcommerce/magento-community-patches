@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'patches/**'
+      - 'patches.json'
+      - 'src/**'
+      - 'composer.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Work out the next version
+        id: version
+        run: |
+          previous=$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
+          if [ -z "$previous" ]; then
+            version=1.0.0
+          else
+            IFS=. read -r major minor patch <<< "$previous"
+            # New or removed patches are a minor release; anything else is a patch release.
+            if git diff --quiet "$previous" HEAD -- patches.json; then
+              version="$major.$minor.$((patch + 1))"
+            else
+              version="$major.$((minor + 1)).0"
+            fi
+          fi
+          echo "previous=$previous" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build the release assets
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir dist
+          git archive --format=zip --prefix="magento-community-patches-$VERSION/" -o "dist/magento-community-patches-$VERSION.zip" HEAD
+          (cd patches && sha256sum ./*.patch | sed 's# \./# #') > dist/patches-manifest.sha256
+      - name: Write the release notes
+        env:
+          PREVIOUS: ${{ steps.version.outputs.previous }}
+        run: |
+          ids() { jq -r '.patches[].id' | sort; }
+          if [ -n "$PREVIOUS" ]; then
+            git show "$PREVIOUS:patches.json" | ids > before.txt
+          else
+            : > before.txt
+          fi
+          ids < patches.json > after.txt
+          {
+            echo "## Patches"
+            added=$(comm -13 before.txt after.txt)
+            removed=$(comm -23 before.txt after.txt)
+            if [ -n "$added" ]; then echo; echo "Added:"; echo "$added" | sed 's/^/- /'; fi
+            if [ -n "$removed" ]; then echo; echo "Removed:"; echo "$removed" | sed 's/^/- /'; fi
+            if [ -z "$added$removed" ]; then echo; echo "No patch changes."; fi
+            echo
+            echo "Every patch matches the sha256 Adobe publishes in its [patch registry](https://repo.magento.com/patch/patch-registry.json). \`patches-manifest.sha256\` lists them, and this release carries a GitHub build provenance attestation."
+          } > notes.md
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/magento-community-patches-${{ steps.version.outputs.version }}.zip
+            dist/patches-manifest.sha256
+      - name: Tag and publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$VERSION" dist/* --target "$GITHUB_SHA" --title "$VERSION" --notes-file notes.md

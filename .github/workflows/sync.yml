@@ -1,0 +1,68 @@
+name: Sync with Adobe's patch registry
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: registry-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: zip
+          tools: composer:v2
+      - run: composer install --no-interaction --no-progress
+      - name: Sync patches/ and patches.json
+        id: sync
+        run: |
+          set +e
+          tools/bin/sync > sync-report.txt
+          code=$?
+          set -e
+          cat sync-report.txt
+          case "$code" in
+            0) echo "changed=false" >> "$GITHUB_OUTPUT" ;;
+            10) echo "changed=true" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$code" ;;
+          esac
+      - name: Build pull request body
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          {
+            echo "Automated sync with [Adobe's patch registry](https://repo.magento.com/patch/patch-registry.json)."
+            echo
+            echo "Every added patch passed every shipping check: Magento Open Source area, no entitlement, public download (HTTP 200, no redirect), sha256 equal to the registry, only Magento Open Source files changed, and every prerequisite shippable."
+            echo
+            echo '```'
+            cat sync-report.txt
+            echo '```'
+            echo
+            echo "Review before merging: merging publishes a release."
+          } > pr-body.md
+          rm sync-report.txt
+      - name: Open or update the pull request
+        if: steps.sync.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          # A token other than GITHUB_TOKEN, so CI runs on the pull request.
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+          branch: sync/adobe-patch-registry
+          delete-branch: true
+          add-paths: |
+            patches/
+            patches.json
+          commit-message: 'feat(patches): sync with Adobe patch registry'
+          title: 'feat(patches): sync with Adobe patch registry'
+          body-path: pr-body.md
