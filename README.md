@@ -1,5 +1,7 @@
 # Magento Community Patches
 
+> **Beta.** This package is new and we are still ironing out bugs. Try it on a staging environment before production, check the install output, and please [open an issue](https://github.com/DeployEcommerce/magento-community-patches/issues) if anything looks wrong.
+
 `deployecommerce/magento-community-patches` is a Composer plugin. It applies Adobe's official security patches for Magento Open Source automatically every time you run `composer install` or `composer update`.
 
 ```bash
@@ -46,7 +48,7 @@ This project is not affiliated with, endorsed by or supported by Adobe. "Adobe",
 
 Adobe's `magento/magento-cloud-patches` package is how Adobe Commerce projects receive security patches automatically. Magento Open Source projects relied on it as well, because `magento/quality-patches` pulls it in. That route is no longer open to Magento Open Source:
 
-- **From version 1.1.15 (July 2026), `magento/magento-cloud-patches` is distributed only through Adobe's Commerce repository and needs an Adobe Commerce entitlement to download.** The public GitHub repository stops at 1.1.14. Magento Open Source projects without that entitlement have no supported way to get later releases.
+- **From version 1.1.15 (July 2026), `magento/magento-cloud-patches` is distributed only through Adobe's Commerce repository and needs an Adobe Commerce entitlement to download.** The public GitHub repository stops at 1.1.14. Magento Open Source projects without that entitlement have no supported way to get later releases. [Adobe gates magento-cloud-patches behind an EE entitlement](https://dor.ky/post/adobe-gates-magento-cloud-patches-behind-ee-entitlement) explains the change and what it means for Magento Open Source projects.
 - **It only applies patches when a project runs `vendor/bin/ece-patches apply` itself.** Composer does not run scripts that belong to dependencies, so a project that forgets the call gets no patches.
 - **Its copies of the monthly patches do not always match the patches Adobe publishes.** For example, the October 2026 patch for 2.4.8-p5 in 1.1.22 leaves out the `framework/Validator/EmailAddress.php` change that Adobe's published `248p5-2026-10-001-CE` patch contains.
 
