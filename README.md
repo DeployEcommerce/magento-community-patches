@@ -38,7 +38,7 @@ Each patch has a sibling `.sha256` file. Its hash must equal the `sha256` Adobe 
 cd patches && sha256sum -c *.sha256
 ```
 
-A public page compares every shipped patch with Adobe's registry and is rebuilt daily: <https://deployecommerce.github.io/magento-community-patches/>. Any mismatch opens an issue on this repository.
+A public page compares every shipped patch with Adobe's registry and is rebuilt within an hour of any change to the registry: <https://deployecommerce.github.io/magento-community-patches/>. Any mismatch opens an issue on this repository.
 
 The plugin code in `src/` was written by Deploy Ecommerce and is also licensed under OSL-3.0.
 
@@ -73,7 +73,7 @@ A patch is published only for the versions in its registry entry that are public
 
 Everything is automated from Adobe's public patch registry; nothing is added by hand.
 
-1. **Sync** (daily, `.github/workflows/sync.yml`): `tools/bin/sync` reads the registry, applies the checks above, downloads only the patches that pass, and opens a pull request with the new `.patch` and `.sha256` files and the regenerated `patches.json`. If Adobe ever changes the bytes of a patch it already published, the sync stops and asks for a human review instead of overwriting it.
+1. **Sync** (every 15 minutes, `.github/workflows/sync.yml`): `tools/bin/sync` reads the registry, applies the checks above, downloads only the patches that pass, and opens a pull request with the new `.patch` and `.sha256` files and the regenerated `patches.json`. If Adobe ever changes the bytes of a patch it already published, the sync stops and asks for a human review instead of overwriting it.
 2. **CI** (`.github/workflows/ci.yml`): runs the tests on PHP 8.1 to 8.5, re-checks every patch against the live registry (`tools/bin/verify`), and applies each release's full patch sequence to pristine Magento Open Source files from the Mage-OS mirror (`tools/bin/apply-test`).
 3. **Release** (`.github/workflows/release.yml`): merging to `main` tags a release. Adding or removing patches is a minor release, anything else a patch release. Each release carries `patches-manifest.sha256` and a GitHub build provenance attestation:
 
@@ -81,5 +81,5 @@ Everything is automated from Adobe's public patch registry; nothing is added by 
    gh attestation verify patches-manifest.sha256 --repo DeployEcommerce/magento-community-patches
    ```
 
-4. **Hash page** (`.github/workflows/pages.yml`): rebuilt on every push to `main` and daily.
+4. **Hash page** (`.github/workflows/pages.yml`): rebuilt on every push to `main`, and hourly whenever Adobe's registry has changed since the last build.
 
