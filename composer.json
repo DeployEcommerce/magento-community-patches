@@ -11,6 +11,9 @@
         "composer/composer": "^2.6",
         "phpunit/phpunit": "^10.5"
     },
+    "conflict": {
+        "magento/product-enterprise-edition": "*"
+    },
     "autoload": {
         "psr-4": {
             "DeployEcommerce\\CommunityPatches\\": "src/"

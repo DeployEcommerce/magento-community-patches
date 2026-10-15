@@ -88,9 +88,20 @@ class ComposerInstallTest extends TestCase
         $this->assertStringNotContainsString('Applied', $output);
     }
 
-    public function testInstallFailsOnAdobeCommerceAndPointsToCloudPatches(): void
+    public function testComposerRefusesToInstallAlongsideAdobeCommerce(): void
     {
         $this->buildProject(['248p5-2026-10-001-CE' => self::change('hello.txt', 'unpatched', 'patched')], [], false, [], true);
+
+        [$code, $output] = $this->composer('install');
+        $this->assertNotSame(0, $code);
+        $this->assertStringContainsString('deployecommerce/magento-community-patches 1.0.0 conflicts with magento/product-enterprise-edition', $output);
+        $this->assertDirectoryDoesNotExist($this->dir . '/project/vendor/magento/magento2-base');
+    }
+
+    public function testInstallFailsOnAdobeCommerceAndPointsToCloudPatches(): void
+    {
+        // Without the conflict, as when Composer's resolution is bypassed, the plugin still refuses.
+        $this->buildProject(['248p5-2026-10-001-CE' => self::change('hello.txt', 'unpatched', 'patched')], [], false, [], true, false);
 
         [$code, $output] = $this->composer('install');
         $this->assertNotSame(0, $code);
@@ -184,8 +195,9 @@ class ComposerInstallTest extends TestCase
      * @param array<string, array{0: string, 1: string}> $cloudPatches file name => [title, diff], shipped by a stand-in magento-cloud-patches
      * @param array<string, string[]> $scripts root composer.json scripts
      * @param bool $enterprise also install a stand-in magento/product-enterprise-edition
+     * @param bool $conflict keep the plugin's conflict with magento/product-enterprise-edition
      */
-    private function buildProject(array $patches, array $cloudPatches = [], bool $badHash = false, array $scripts = [], bool $enterprise = false): void
+    private function buildProject(array $patches, array $cloudPatches = [], bool $badHash = false, array $scripts = [], bool $enterprise = false, bool $conflict = true): void
     {
         $root = dirname(__DIR__, 2);
         $repositories = [];
@@ -197,6 +209,9 @@ class ComposerInstallTest extends TestCase
         $pluginComposer = json_decode((string) file_get_contents($root . '/composer.json'), true);
         $pluginComposer['version'] = '1.0.0';
         unset($pluginComposer['require-dev'], $pluginComposer['autoload-dev']);
+        if (!$conflict) {
+            unset($pluginComposer['conflict']);
+        }
         $this->writeJson($plugin . '/composer.json', $pluginComposer);
         $manifest = [];
         $previous = [];

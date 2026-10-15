@@ -9,9 +9,41 @@ composer config allow-plugins.deployecommerce/magento-community-patches true
 composer require deployecommerce/magento-community-patches
 ```
 
-**Magento Open Source only.** On an Adobe Commerce project (one with `magento/product-enterprise-edition` installed) the plugin stops the install before patching anything and tells you to install `magento/magento-cloud-patches` instead. Adobe Commerce needs Adobe's Commerce patches, which this package does not ship.
+**Magento Open Source only.** Composer will not install this package on an Adobe Commerce project. See [Adobe Commerce projects](#adobe-commerce-projects).
 
 The plugin reads the installed version of `magento/magento2-base`, selects the patches published for that version, and applies them with `git apply` in the order Adobe's prerequisites require. A patch that is already applied is skipped. A patch that can neither be applied nor recognised as already applied stops the install with an error, so a half-patched project never goes unnoticed.
+
+## Adobe Commerce projects
+
+Adobe Commerce needs Adobe's Commerce patches, which this package does not ship, so it refuses to run on an Adobe Commerce project, meaning one with `magento/product-enterprise-edition` installed. You will see one of two failures.
+
+**Composer cannot resolve your requirements.** The package declares a conflict with `magento/product-enterprise-edition`, so `composer require` and `composer update` stop before anything is downloaded or changed:
+
+```text
+Your requirements could not be resolved to an installable set of packages.
+
+  Problem 1
+    - Root composer.json requires deployecommerce/magento-community-patches ...
+    - deployecommerce/magento-community-patches x.y.z conflicts with magento/product-enterprise-edition *.
+```
+
+**The plugin stops before patching.** If the package is installed anyway, for example from a lock file written before the conflict existed, the plugin fails the install before it changes any file:
+
+```text
+magento-community-patches: magento/product-enterprise-edition is installed, so this is an Adobe Commerce project.
+This package only applies Magento Open Source patches and must not be used on Adobe Commerce.
+```
+
+In both cases the fix is the same. Remove this package and use Adobe's own:
+
+```bash
+composer remove deployecommerce/magento-community-patches
+composer require magento/magento-cloud-patches
+```
+
+Then run `vendor/bin/ece-patches apply` from your root scripts, as shown in the next section.
+
+If your project is Magento Open Source and you still see either failure, something requires `magento/product-enterprise-edition`. `composer why magento/product-enterprise-edition` shows what.
 
 ## Projects that also use magento/magento-cloud-patches
 
