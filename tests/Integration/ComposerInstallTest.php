@@ -88,6 +88,18 @@ class ComposerInstallTest extends TestCase
         $this->assertStringNotContainsString('Applied', $output);
     }
 
+    public function testInstallFailsOnAdobeCommerceAndPointsToCloudPatches(): void
+    {
+        $this->buildProject(['248p5-2026-10-001-CE' => self::change('hello.txt', 'unpatched', 'patched')], [], false, [], true);
+
+        [$code, $output] = $this->composer('install');
+        $this->assertNotSame(0, $code);
+        $this->assertStringContainsString('magento/product-enterprise-edition is installed', $output);
+        $this->assertStringContainsString('    composer remove deployecommerce/magento-community-patches', $output);
+        $this->assertStringContainsString('    composer require magento/magento-cloud-patches', $output);
+        $this->assertSame("unpatched\n", $this->read('hello.txt'));
+    }
+
     public function testBeforeEcePatchesRunsOnlyFilesItWillNeverPatchAreTouched(): void
     {
         $hello = self::change('hello.txt', 'unpatched', 'patched');
@@ -171,8 +183,9 @@ class ComposerInstallTest extends TestCase
      * @param array<string, string> $patches id => diff, in requires order
      * @param array<string, array{0: string, 1: string}> $cloudPatches file name => [title, diff], shipped by a stand-in magento-cloud-patches
      * @param array<string, string[]> $scripts root composer.json scripts
+     * @param bool $enterprise also install a stand-in magento/product-enterprise-edition
      */
-    private function buildProject(array $patches, array $cloudPatches = [], bool $badHash = false, array $scripts = []): void
+    private function buildProject(array $patches, array $cloudPatches = [], bool $badHash = false, array $scripts = [], bool $enterprise = false): void
     {
         $root = dirname(__DIR__, 2);
         $repositories = [];
@@ -221,6 +234,14 @@ class ComposerInstallTest extends TestCase
             $this->writeJson($cloud . '/composer.json', ['name' => 'magento/magento-cloud-patches', 'version' => '1.1.22']);
             $repositories[] = ['type' => 'path', 'url' => $cloud, 'options' => ['symlink' => false]];
             $require['magento/magento-cloud-patches'] = '1.1.22';
+        }
+
+        if ($enterprise) {
+            $ee = $this->dir . '/ee';
+            mkdir($ee);
+            $this->writeJson($ee . '/composer.json', ['name' => 'magento/product-enterprise-edition', 'version' => '2.4.8-p5']);
+            $repositories[] = ['type' => 'path', 'url' => $ee, 'options' => ['symlink' => false]];
+            $require['magento/product-enterprise-edition'] = '2.4.8-p5';
         }
 
         mkdir($this->dir . '/project');

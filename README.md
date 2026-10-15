@@ -9,6 +9,8 @@ composer config allow-plugins.deployecommerce/magento-community-patches true
 composer require deployecommerce/magento-community-patches
 ```
 
+**Magento Open Source only.** On an Adobe Commerce project (one with `magento/product-enterprise-edition` installed) the plugin stops the install before patching anything and tells you to install `magento/magento-cloud-patches` instead. Adobe Commerce needs Adobe's Commerce patches, which this package does not ship.
+
 The plugin reads the installed version of `magento/magento2-base`, selects the patches published for that version, and applies them with `git apply` in the order Adobe's prerequisites require. A patch that is already applied is skipped. A patch that can neither be applied nor recognised as already applied stops the install with an error, so a half-patched project never goes unnoticed.
 
 ## Projects that also use magento/magento-cloud-patches

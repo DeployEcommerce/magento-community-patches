@@ -24,6 +24,8 @@ class Plugin implements PluginInterface, EventSubscriberInterface
 
     private const CLOUD_PATCHES_PACKAGE = 'magento/magento-cloud-patches';
 
+    private const ENTERPRISE_PACKAGE = 'magento/product-enterprise-edition';
+
     /** Below root scripts, which Composer runs at priority 0. */
     private const PRIORITY = -100;
 
@@ -53,6 +55,24 @@ class Plugin implements PluginInterface, EventSubscriberInterface
         $io = $event->getIO();
 
         $installed = $composer->getRepositoryManager()->getLocalRepository();
+
+        // Only Magento Open Source patches are shipped. Adobe Commerce needs its own
+        // patches, which come from magento-cloud-patches, so stop before touching anything.
+        if ($installed->findPackage(self::ENTERPRISE_PACKAGE, '*') !== null) {
+            // Written as plain lines first: Composer wraps exception text at the terminal
+            // width, which would break the commands mid-word.
+            $io->writeError([
+                '<error>magento-community-patches: ' . self::ENTERPRISE_PACKAGE . ' is installed, so this is an Adobe Commerce project.</error>',
+                'This package only applies Magento Open Source patches and must not be used on Adobe Commerce.',
+                'Remove it and install ' . self::CLOUD_PATCHES_PACKAGE . ' instead:',
+                '',
+                '    composer remove deployecommerce/magento-community-patches',
+                '    composer require ' . self::CLOUD_PATCHES_PACKAGE,
+                '',
+            ]);
+            throw new PatchException('Adobe Commerce project: use magento/magento-cloud-patches instead.');
+        }
+
         $base = $installed->findPackage(self::BASE_PACKAGE, '*');
         if ($base === null) {
             $io->write('<warning>magento-community-patches: magento/magento2-base is not installed; nothing to patch.</warning>');
