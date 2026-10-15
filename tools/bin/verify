@@ -7,7 +7,7 @@
  *  - the hash also matches the sha256 Adobe publishes for that patch id
  *  - the registry still lists it as an unrestricted Magento Open Source patch
  *  - every patch it requires is shipped too
- *  - patches/ holds nothing patches.json does not list
+ *  - patches/ holds nothing patches.json does not list, apart from superseded/ (old versions Adobe re-issued)
  *
  * Exit code: 0 all good, 1 any problem.
  */
@@ -67,7 +67,7 @@ foreach ($data['patches'] as $patch) {
 }
 
 foreach (glob($root . '/patches/*') ?: [] as $file) {
-    if (!in_array(realpath($file), $listed, true) && basename($file) !== '.gitkeep') {
+    if (!in_array(realpath($file), $listed, true) && !in_array(basename($file), ['.gitkeep', 'superseded'], true)) {
         $problems[] = 'unexpected file patches/' . basename($file);
     }
 }

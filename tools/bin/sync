@@ -36,8 +36,11 @@ foreach ($result['added'] as $id) {
 foreach ($result['removed'] as $id) {
     echo "removed  $id\n";
 }
+foreach ($result['reissued'] as $id => $sha256) {
+    echo "reissued $id: Adobe changed this patch; the old version (sha256 $sha256) is kept in patches/superseded/\n";
+}
 foreach ($result['rejected'] as $id => $reason) {
     echo "skipped  $id: $reason\n";
 }
 
-exit($result['added'] === [] && $result['removed'] === [] ? 0 : 10);
+exit($result['added'] === [] && $result['removed'] === [] && $result['reissued'] === [] ? 0 : 10);
