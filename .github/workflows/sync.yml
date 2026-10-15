@@ -76,9 +76,9 @@ jobs:
     needs: sync
     if: needs.sync.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    # The sync app's token does the writing, so GITHUB_TOKEN only needs to read.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -116,11 +116,20 @@ jobs:
           done
           cp "$SYNC/patches.json" patches.json
           cp "$SYNC/pr-body.md" "$RUNNER_TEMP/pr-body.md"
+      - name: Create a token for the sync app
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.SYNC_APP_ID }}
+          private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
       - name: Open or update the pull request
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
-          # A token other than GITHUB_TOKEN, so CI runs on the pull request.
-          token: ${{ secrets.SYNC_TOKEN || github.token }}
+          # A token other than GITHUB_TOKEN, so CI runs on the pull request. It belongs
+          # to the sync app, which cannot bypass branch protection, and expires after an hour.
+          token: ${{ steps.app-token.outputs.token }}
           branch: sync/adobe-patch-registry
           delete-branch: true
           add-paths: |
