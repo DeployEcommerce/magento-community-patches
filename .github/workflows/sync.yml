@@ -2,7 +2,8 @@ name: Sync with Adobe's patch registry
 
 on:
   schedule:
-    - cron: '17 6 * * *'
+    # Every 15 minutes, off the quarter hour, where scheduled runs queue longest.
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
 
 permissions:
