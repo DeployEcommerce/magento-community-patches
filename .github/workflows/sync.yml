@@ -49,6 +49,10 @@ jobs:
             echo
             echo "Every added patch passed every shipping check: Magento Open Source area, no entitlement, public download (HTTP 200, no redirect), sha256 equal to the registry, only Magento Open Source files changed, and every prerequisite shippable."
             echo
+            if grep -q '^reissued ' sync-report.txt; then
+              echo "**Adobe re-issued at least one patch already shipped under the same id.** The version we shipped before is kept in \`patches/superseded/\`; compare it with the new file before merging."
+              echo
+            fi
             echo '```'
             cat sync-report.txt
             echo '```'
@@ -89,17 +93,25 @@ jobs:
         run: |
           rm -f patches/*.patch patches/*.patch.sha256
           find "$SYNC/patches" -type f | while read -r file; do
-            name=$(basename "$file")
-            case "$name" in
+            path=${file#"$SYNC/patches/"}
+            case "$path" in
               .gitkeep) ;;
-              *.patch|*.patch.sha256)
-                if ! printf '%s' "$name" | grep -Eq '^[0-9A-Za-z.-]+-CE\.patch(\.sha256)?$'; then
-                  echo "Unexpected file name: $name" >&2
+              superseded/*)
+                if ! printf '%s' "$path" | grep -Eq '^superseded/[0-9A-Za-z.-]+-CE\.[0-9a-f]{12}\.patch(\.sha256)?$'; then
+                  echo "Unexpected file name: $path" >&2
                   exit 1
                 fi
-                cp "$file" "patches/$name"
+                mkdir -p patches/superseded
+                cp "$file" "patches/$path"
                 ;;
-              *) echo "Unexpected file: $name" >&2; exit 1 ;;
+              *.patch|*.patch.sha256)
+                if ! printf '%s' "$path" | grep -Eq '^[0-9A-Za-z.-]+-CE\.patch(\.sha256)?$'; then
+                  echo "Unexpected file name: $path" >&2
+                  exit 1
+                fi
+                cp "$file" "patches/$path"
+                ;;
+              *) echo "Unexpected file: $path" >&2; exit 1 ;;
             esac
           done
           cp "$SYNC/patches.json" patches.json

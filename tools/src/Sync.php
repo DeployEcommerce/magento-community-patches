@@ -26,7 +26,7 @@ class Sync
     }
 
     /**
-     * @return array{added: string[], removed: string[], rejected: array<string, string>}
+     * @return array{added: string[], removed: string[], reissued: array<string, string>, rejected: array<string, string>}
      */
     public function run(bool $write): array
     {
@@ -50,15 +50,13 @@ class Sync
         }
 
         $existing = $this->shippedIds();
+        // Adobe can re-issue a patch under the same id. The old version is kept in
+        // patches/superseded/ and the change is reported, so the sync pull request is where it is reviewed.
+        $reissued = [];
         foreach ($shippable as $id) {
             $file = $this->patchPath($id);
-            // Adobe re-issuing a patch under the same id must be reviewed, never overwritten quietly.
             if (is_file($file) && file_get_contents($file) !== $this->gate->content($id)) {
-                throw new \RuntimeException(sprintf(
-                    'Patch %s changed upstream (registry sha256 %s). Review the new version and remove the old file to accept it.',
-                    $id,
-                    $this->registry->get($id)['sha256']
-                ));
+                $reissued[$id] = hash_file('sha256', $file);
             }
         }
 
@@ -66,6 +64,9 @@ class Sync
         $removed = array_values(array_diff($existing, $shippable));
 
         if ($write) {
+            foreach ($reissued as $id => $sha256) {
+                $this->archive($id, $sha256);
+            }
             foreach ($removed as $id) {
                 unlink($this->patchPath($id));
                 unlink($this->patchPath($id) . '.sha256');
@@ -80,7 +81,21 @@ class Sync
             $this->writeManifest($shippable);
         }
 
-        return ['added' => $added, 'removed' => $removed, 'rejected' => $rejected];
+        return ['added' => $added, 'removed' => $removed, 'reissued' => $reissued, 'rejected' => $rejected];
+    }
+
+    /**
+     * Keeps the version of a patch we shipped before Adobe re-issued it.
+     */
+    private function archive(string $id, string $sha256): void
+    {
+        $dir = $this->root . '/patches/superseded';
+        if (!is_dir($dir) && !mkdir($dir, 0777, true) && !is_dir($dir)) {
+            throw new \RuntimeException(sprintf('Could not create %s.', $dir));
+        }
+        $name = sprintf('%s.%s.patch', $id, substr($sha256, 0, 12));
+        copy($this->patchPath($id), $dir . '/' . $name);
+        file_put_contents($dir . '/' . $name . '.sha256', sprintf("%s  %s\n", $sha256, $name));
     }
 
     /**
