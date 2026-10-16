@@ -8,6 +8,7 @@ use DeployEcommerce\CommunityPatches\Tools\CePackages;
 use DeployEcommerce\CommunityPatches\Tools\Gate;
 use DeployEcommerce\CommunityPatches\Tools\Http;
 use DeployEcommerce\CommunityPatches\Tools\Registry;
+use DeployEcommerce\CommunityPatches\Tools\TransientHttpException;
 use PHPUnit\Framework\TestCase;
 
 class GateTest extends TestCase
@@ -140,6 +141,40 @@ class GateTest extends TestCase
 
         $this->assertStringStartsWith('unsafe path', (string) $this->gate()->reject('248p5-2026-10-001-CE'));
     }
+
+    public function testRetriesARateLimitedDownload(): void
+    {
+        $this->add('248p5-2026-10-001-CE', self::diff('vendor/magento/framework/A.php'));
+        $this->http->queued[self::BASE . '248p5-2026-10-001-CE.diff'] = [[429, '', []]];
+
+        $this->assertNull($this->gate()->reject('248p5-2026-10-001-CE'));
+        $this->assertCount(2, $this->http->requested);
+        $this->assertSame([5], $this->http->waited);
+    }
+
+    public function testHonoursRetryAfterUpToAMinute(): void
+    {
+        $this->add('248p5-2026-10-001-CE', self::diff('vendor/magento/framework/A.php'));
+        $this->http->queued[self::BASE . '248p5-2026-10-001-CE.diff'] = [
+            [503, '', ['HTTP/1.1 503 Service Unavailable', 'retry-after: 20']],
+            [429, '', ['HTTP/1.1 429 Too Many Requests', 'Retry-After: 3600']],
+        ];
+
+        $this->assertNull($this->gate()->reject('248p5-2026-10-001-CE'));
+        $this->assertSame([20, 60], $this->http->waited);
+    }
+
+    public function testGivesUpOnADownloadThatStaysRateLimitedInsteadOfRejectingIt(): void
+    {
+        $this->add('248p5-2026-10-001-CE', self::diff('vendor/magento/framework/A.php'), [], 429);
+
+        $this->expectException(TransientHttpException::class);
+        try {
+            $this->gate()->reject('248p5-2026-10-001-CE');
+        } finally {
+            $this->assertCount(3, $this->http->requested);
+        }
+    }
 }
 
 class FakeHttp extends Http
@@ -147,14 +182,29 @@ class FakeHttp extends Http
     /** @var array<string, array{0: int, 1: string}> */
     public $responses = [];
 
+    /** @var array<string, array<array{0: int, 1: string, 2: string[]}>> responses served, in order, before $responses */
+    public $queued = [];
+
     /** @var string[] */
     public $requested = [];
 
-    public function get(string $url): array
+    /** @var int[] */
+    public $waited = [];
+
+    protected function request(string $url): array
     {
         $this->requested[] = $url;
+        if (!empty($this->queued[$url])) {
+            return array_shift($this->queued[$url]);
+        }
+        [$status, $body] = $this->responses[$url] ?? [404, ''];
 
-        return $this->responses[$url] ?? [404, ''];
+        return [$status, $body, []];
+    }
+
+    protected function wait(int $seconds): void
+    {
+        $this->waited[] = $seconds;
     }
 }
 

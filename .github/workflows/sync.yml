@@ -40,6 +40,12 @@ jobs:
           case "$code" in
             0) echo "changed=false" >> "$GITHUB_OUTPUT" ;;
             10) echo "changed=true" >> "$GITHUB_OUTPUT" ;;
+            # Rate limited or a server error, still failing after retries. Nothing was
+            # written; the next scheduled run tries again.
+            75)
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::Sync skipped: Adobe or the Mage-OS mirror is temporarily unavailable. The next scheduled run retries."
+              ;;
             *) exit "$code" ;;
           esac
       - name: Build pull request body
