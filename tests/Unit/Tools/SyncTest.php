@@ -7,6 +7,7 @@ namespace DeployEcommerce\CommunityPatches\Test\Unit\Tools;
 use DeployEcommerce\CommunityPatches\Tools\Gate;
 use DeployEcommerce\CommunityPatches\Tools\Registry;
 use DeployEcommerce\CommunityPatches\Tools\Sync;
+use DeployEcommerce\CommunityPatches\Tools\TransientHttpException;
 use PHPUnit\Framework\TestCase;
 
 require_once __DIR__ . '/GateTest.php';
@@ -32,10 +33,10 @@ class SyncTest extends TestCase
         exec('rm -rf ' . escapeshellarg($this->root));
     }
 
-    private function sync(string $body): Sync
+    private function sync(string $body, int $status = 200): Sync
     {
         $http = new FakeHttp();
-        $http->responses[self::BASE . self::ID . '.diff'] = [200, $body];
+        $http->responses[self::BASE . self::ID . '.diff'] = [$status, $body];
         $registry = new Registry(['_schema' => ['version' => '1.0', 'patch_base_url' => rtrim(self::BASE, '/')], 'patches' => [
             self::ID => [
                 'applies_to' => ['2.4.8-p5'],
@@ -88,5 +89,18 @@ class SyncTest extends TestCase
 
         $this->assertSame([], $result['reissued']);
         $this->assertDirectoryDoesNotExist($this->root . '/patches/superseded');
+    }
+
+    public function testKeepsAShippedPatchWhenAdobeRateLimitsTheDownload(): void
+    {
+        file_put_contents($this->root . '/patches/' . self::ID . '.patch', self::NEW);
+
+        try {
+            $this->sync(self::NEW, 429)->run(true);
+            $this->fail('A rate-limited download must abort the sync.');
+        } catch (TransientHttpException $e) {
+            $this->assertFileExists($this->root . '/patches/' . self::ID . '.patch');
+            $this->assertFileDoesNotExist($this->root . '/patches.json');
+        }
     }
 }
